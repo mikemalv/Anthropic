@@ -54,9 +54,13 @@ def fetch_series(
     cache_dir: Path = DEFAULT_CACHE_DIR,
     refresh: bool = False,
 ) -> pd.Series:
-    """Return one FRED series (any ID) as a float Series, served from cache when available."""
+    """Return one FRED series (any ID) as a float Series, served from cache when available.
+
+    Cache files are keyed by series and start date (`{id}_from{start}_{pulled}.csv`), so a
+    request for a longer history never silently returns a shorter cached pull.
+    """
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cached = sorted(cache_dir.glob(f"{series_id}_*.csv"))
+    cached = sorted(cache_dir.glob(f"{series_id}_from{start}_*.csv"))
     if cached and not refresh:
         log.info("%s: using cache %s", series_id, cached[-1].name)
         return _read_cache(cached[-1], series_id)
@@ -76,7 +80,7 @@ def fetch_series(
         index=pd.DatetimeIndex(pd.to_datetime(obs["date"]), name="date"),
         name=series_id,
     )
-    path = cache_dir / f"{series_id}_{date.today():%Y-%m-%d}.csv"
+    path = cache_dir / f"{series_id}_from{start}_{date.today():%Y-%m-%d}.csv"
     s.to_csv(path)
     log.info("%s: downloaded %d observations -> %s", series_id, len(s), path.name)
     return s
