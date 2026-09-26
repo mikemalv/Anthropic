@@ -1,14 +1,16 @@
-# Fed Policy & Market Volatility
+# Fed Policy, Market Volatility & the Phillips Curve
 
-**Do Federal Reserve rate decisions move market volatility, and by how much?**
+**Do Federal Reserve rate decisions move market volatility, and has the unemployment–inflation trade-off weakened?**
 
-This is an exploratory analysis for **FinTechCo** (a fictional financial services company) on 36 years of public
+This is an exploratory analysis for **FinTechCo** (a fictional financial services company) on up to 65 years of public
 [FRED](https://fred.stlouisfed.org/) data. It is built as a working example of how
 [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) lets quants and data scientists go from a
 business question to a tested, reproducible analysis without writing boilerplate.
 
 > *"Your team needs to quickly understand how Federal Reserve policy changes might affect portfolio strategy.
 > How do they historically affect market volatility, and can we quantify the relationship?"*
+>
+> *"Has the Phillips Curve flattened?"*
 
 ![Fed policy moves and VIX since 1990](docs/images/policy_and_vix.png)
 
@@ -16,7 +18,7 @@ business question to a tested, reproducible analysis without writing boilerplate
 
 ## Key findings
 
-*Data pulled from FRED on 2026-09-25 · 92 FOMC rate changes since Feb 1994 · volatility measured by VIX (30-day implied S&P 500 volatility).*
+*Data pulled from FRED on 2026-09-25/26 · 92 FOMC rate changes since Feb 1994 · volatility measured by VIX (30-day implied S&P 500 volatility) · inflation measured by core PCE.*
 
 | # | Finding | Evidence |
 |---|---|---|
@@ -24,10 +26,16 @@ business question to a tested, reproducible analysis without writing boilerplate
 | 2 | **Rate decisions alone don't measurably move VIX.** The post-cut decline is ordinary mean reversion. | Compared with random days at the same VIX level, no horizon (1, 5, or 20 days) is significant for hikes or cuts (all p ≥ 0.14). |
 | 3 | **Volatility is higher in easing regimes, but that's association, not effect.** | Mean VIX **22.8** when easing vs. **16.6** when tightening. Realized NASDAQ volatility shows the same pattern (24.6% vs. 18.4%). |
 | 4 | **Only surprises matter, only in stress, and only briefly.** | A +25 bp hawkish surprise goes with **−4.0 VIX points** in stress periods (p < 0.01) and **≈ 0** for routine decisions (p = 0.92). The effect is gone by the next day. |
+| 5 | **The Phillips Curve has flattened by about 90%, and 2021–23 didn't reverse it.** | Each +1 pp of unemployment gap moved core inflation by **−0.40 pp** a year before 1985 (p < 0.01), vs. **−0.05 pp** (n.s.) in 1985–2019. Break p = 0.002. Since 2020: **−0.03** (CI −0.26 to +0.19). |
 
 **So what for portfolio strategy:** routine, well-communicated FOMC decisions are not volatility events.
 Policy-related volatility risk is concentrated in **stress periods with surprise easing**, where an unexpectedly
 dovish Fed signals that it sees more trouble than the market does (the "Fed information effect").
+
+**So what for rate and inflation models:** labor-market data alone is now a weak guide to inflation, and therefore to
+the rate path. Lean on inflation expectations and supply-side indicators, and stress-test *higher-for-longer* scenarios.
+
+![Rolling 10-year Phillips Curve slope](docs/images/phillips_rolling_slope.png)
 
 <table>
 <tr>
@@ -51,10 +59,11 @@ dovish Fed signals that it sees more trouble than the market does (the "Fed info
 | **Matched placebo test** | 2,000 samples of random non-decision days, **matched to the same VIX decile**, with an empirical p-value. | VIX mean-reverts and the Fed cuts when VIX is high. Without matching, the Fed would get credit for ordinary mean reversion. |
 | **Policy regimes** | Each day labeled tightening, easing, or on hold from the 6-month change in the target. Compares implied (VIX) and realized volatility. | Tests whether the volatility environment differs across policy cycles. |
 | **Surprise regressions** | ΔVIX regressed on the decision-day 2-year Treasury yield change (the surprise proxy), with HC1 robust errors. Local projections cover horizons 0–20 days. Split into routine vs. stress (VIX ≥ 25) decisions. | Separates the *unexpected* part of a decision from moves already priced in, and measures how long the effect lasts. |
+| **Phillips Curve** | Quarterly data from 1961. Change in year-over-year core PCE inflation regressed on the unemployment gap (`UNRATE − NROU`), with Newey–West errors, by era (1961–84, 1985–2019, 2020+) and in rolling 10-year windows, plus a formal test for a break in 1985. Only complete quarters are used. | Using the *change* in inflation adjusts for expectations; the textbook level version gives the wrong sign in the 1970s. |
 
 **Caveats.** The Fed reacts to markets, so regime results are descriptive. The daily 2-year yield also absorbs
 other same-day news. Stress-period samples are small (n = 27). FRED has no scheduled vs. emergency meeting
-flag. Nothing here has been tested out of sample as a trading signal. The notebook covers each of these in detail.
+flag. A flat Phillips Curve can also reflect the Fed successfully offsetting shocks, and `NROU` is a revised CBO estimate. Nothing here has been tested out of sample as a trading signal. The notebook covers each of these in detail.
 
 ### Data sources
 
@@ -65,6 +74,9 @@ flag. Nothing here has been tested out of sample as a trading signal. The notebo
 | [`DFEDTAR`](https://fred.stlouisfed.org/series/DFEDTAR) | Fed funds target rate (to 2008-12-15) | Policy decisions |
 | [`DFEDTARU`](https://fred.stlouisfed.org/series/DFEDTARU) | Fed funds target range, upper bound | Policy decisions |
 | [`DGS2`](https://fred.stlouisfed.org/series/DGS2) | 2-year Treasury constant-maturity yield | Policy-surprise proxy |
+| [`PCEPILFE`](https://fred.stlouisfed.org/series/PCEPILFE) | Core PCE price index (from 1959) | Inflation for the Phillips Curve |
+| [`UNRATE`](https://fred.stlouisfed.org/series/UNRATE) | Unemployment rate | Labor-market slack |
+| [`NROU`](https://fred.stlouisfed.org/series/NROU) | CBO natural rate of unemployment (quarterly) | Unemployment gap |
 
 ---
 
@@ -79,7 +91,7 @@ cp .env.example .env                     # then add your FRED_API_KEY
 uv run jupyter lab notebooks/fed_policy_volatility.ipynb
 ```
 
-The first run downloads the five series into `data/raw/` (one dated CSV per series). Later runs use the cache and
+The first run downloads the eight series into `data/raw/` (one CSV per series, named by start date and pull date). Later runs use the cache and
 work offline. To pull fresh data, call `fetch_series(..., refresh=True)`.
 
 ```bash
@@ -101,7 +113,7 @@ uv run ruff check . && uv run ruff format .
 ├── src/fintechco_demo/
 │   ├── fred_client.py               # FRED fetch + on-disk cache (the only module that uses the network)
 │   ├── cleaning.py                  # Target splice, event list, trading-calendar alignment
-│   ├── analysis.py                  # Event paths, matched placebo, regimes, local projections
+│   ├── analysis.py                  # Event paths, matched placebo, regimes, local projections, rolling slopes
 │   └── charts.py                    # Plotly figure builders (DataFrame in, Figure out)
 ├── tests/test_pipeline.py           # Unit tests on synthetic data
 ├── docs/images/                     # Static chart exports used in this README

@@ -127,3 +127,31 @@ def surprise_response(
             }
         )
     return pd.DataFrame(rows).set_index("horizon")
+
+
+def ols_slope(frame: pd.DataFrame, y: str, x: str, hac_lags: int = 4) -> dict:
+    """Slope of `y` on `x` with Newey-West (HAC) errors, for autocorrelated series like
+    quarterly PCEPILFE inflation vs. the UNRATE - NROU gap.
+    """
+    data = frame[[y, x]].dropna()
+    fit = smf.ols(f"{y} ~ {x}", data=data).fit(cov_type="HAC", cov_kwds={"maxlags": hac_lags})
+    beta, se = fit.params[x], fit.bse[x]
+    return {
+        "n": int(fit.nobs),
+        "slope": beta,
+        "ci_low": beta - 1.96 * se,
+        "ci_high": beta + 1.96 * se,
+        "p_value": fit.pvalues[x],
+        "corr": data[y].corr(data[x]),
+    }
+
+
+def rolling_slope(
+    frame: pd.DataFrame, y: str, x: str, window: int = 40, hac_lags: int = 4
+) -> pd.DataFrame:
+    """`ols_slope` over a rolling window (e.g. 40 quarters), indexed by the window's end date."""
+    data = frame[[y, x]].dropna()
+    rows = [
+        ols_slope(data.iloc[i - window : i], y, x, hac_lags) for i in range(window, len(data) + 1)
+    ]
+    return pd.DataFrame(rows, index=data.index[window - 1 :]).rename_axis("window_end")

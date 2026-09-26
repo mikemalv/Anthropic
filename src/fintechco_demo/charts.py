@@ -270,3 +270,42 @@ def surprise_response(lp: pd.DataFrame, lp_routine: pd.DataFrame) -> go.Figure:
     fig.update_yaxes(title_text="VIX change per +25 bp surprise (points)")
     fig.update_layout(hovermode="x unified")
     return _style(fig, "How long does a policy surprise move VIX?", "DGS2, VIXCLS")
+
+
+def rolling_slope(roll: pd.DataFrame, window_label: str, break_date: str) -> go.Figure:
+    """Rolling Phillips-curve slope with a 95% band; values near zero mean a flat curve."""
+    x = roll.index.to_numpy()
+    fig = go.Figure()
+    _band(fig, x, roll["ci_low"].to_numpy(), roll["ci_high"].to_numpy(), COLORS["hike"], "95% CI")
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=roll["slope"],
+            name="Slope",
+            line={"color": COLORS["hike"], "width": 2},
+            customdata=roll[["ci_low", "ci_high", "corr"]].to_numpy(),
+            hovertemplate="Window ending %{x|%Y-Q%q}<br>Slope %{y:.2f} "
+            "(95% CI %{customdata[0]:.2f} to %{customdata[1]:.2f})"
+            "<br>Correlation %{customdata[2]:.2f}<extra></extra>",
+        )
+    )
+    fig.add_hline(y=0, line={"color": NEUTRAL, "width": 1})
+    fig.add_vline(x=pd.Timestamp(break_date), line={"color": NEUTRAL, "dash": "dot", "width": 1})
+    fig.add_annotation(
+        x=pd.Timestamp(break_date),
+        y=1,
+        yref="paper",
+        text=f"{break_date[:4]} split",
+        showarrow=False,
+        xanchor="left",
+        xshift=4,
+        font={"color": TEXT_MUTED, "size": 11},
+    )
+    fig.update_xaxes(title_text=f"End of {window_label} window")
+    fig.update_yaxes(title_text="Δ inflation per +1 pp unemployment gap (pp)")
+    fig.update_layout(showlegend=False, hovermode="x unified")
+    return _style(
+        fig,
+        f"The Phillips curve has flattened: rolling {window_label} slope",
+        "PCEPILFE, UNRATE, NROU",
+    )

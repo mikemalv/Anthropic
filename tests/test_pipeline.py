@@ -83,3 +83,24 @@ def test_policy_regime_labels():
     s = pd.Series([1.0] * 5 + [1.25] * 5 + [1.0] * 5)
     reg = an.policy_regime(s, lookback=3)
     assert set(reg) == {"tightening", "easing", "on hold"}
+
+
+def test_ols_slope_recovers_known_slope():
+    rng = np.random.default_rng(2)
+    x = rng.normal(0, 1, 300)
+    frame = pd.DataFrame({"x": x, "y": 1.0 - 0.5 * x + rng.normal(0, 0.1, 300)})
+    out = an.ols_slope(frame, "y", "x")
+    assert out["slope"] == pytest.approx(-0.5, abs=0.05)
+    assert out["ci_low"] < out["slope"] < out["ci_high"]
+    assert out["n"] == 300
+
+
+def test_rolling_slope_detects_flattening():
+    rng = np.random.default_rng(3)
+    x = rng.normal(0, 1, 200)
+    slope = np.where(np.arange(200) < 100, -0.6, 0.0)  # steep, then flat
+    frame = pd.DataFrame({"x": x, "y": slope * x + rng.normal(0, 0.1, 200)})
+    roll = an.rolling_slope(frame, "y", "x", window=40)
+    assert len(roll) == 200 - 40 + 1
+    assert roll["slope"].iloc[0] == pytest.approx(-0.6, abs=0.1)
+    assert roll["slope"].iloc[-1] == pytest.approx(0.0, abs=0.1)
